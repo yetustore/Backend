@@ -11,6 +11,7 @@ const createSchema = z.object({
   password: z.string().min(6),
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
+  phone: z.string().min(5),
   role: z.enum(['Super Admin', 'Admin', 'Entregador']).optional(),
   active: z.boolean().optional(),
 });
@@ -20,15 +21,16 @@ const updateSchema = z.object({
   password: z.string().min(6).optional(),
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
+  phone: z.string().min(5).optional(),
   role: z.enum(['Super Admin', 'Admin', 'Entregador']).optional(),
   active: z.boolean().optional(),
 });
-
 const sanitizeAdmin = (admin) => ({
   id: admin._id.toString(),
   username: admin.username,
   name: admin.name || admin.username,
   email: admin.email || '',
+  phone: admin.phone || '',
   role: admin.role,
   active: admin.active,
   createdAt: admin.createdAt,
@@ -55,6 +57,7 @@ router.post('/', requireAuth('admin'), async (req, res, next) => {
       passwordHash,
       name: data.name,
       email: data.email,
+      phone: data.phone,
       role: data.role || 'Admin',
       active: data.active ?? true,
     });
@@ -83,6 +86,7 @@ router.patch('/:id', requireAuth('admin'), async (req, res, next) => {
 
     if (data.name !== undefined) admin.name = data.name;
     if (data.email !== undefined) admin.email = data.email;
+    if (data.phone !== undefined) admin.phone = data.phone;
     if (data.role !== undefined) admin.role = data.role;
     if (data.active !== undefined) admin.active = data.active;
 

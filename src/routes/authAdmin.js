@@ -17,6 +17,7 @@ const bootstrapSchema = z.object({
   password: z.string().min(6),
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
+  phone: z.string().min(5).optional(),
 });
 
 const sanitizeAdmin = (admin) => ({
@@ -24,6 +25,7 @@ const sanitizeAdmin = (admin) => ({
   username: admin.username,
   name: admin.name || admin.username,
   email: admin.email || '',
+  phone: admin.phone || '',
   role: admin.role,
   active: admin.active,
   createdAt: admin.createdAt,
@@ -45,6 +47,7 @@ router.post('/bootstrap', async (req, res, next) => {
       passwordHash,
       name: data.name,
       email: data.email,
+      phone: data.phone,
       role: 'Super Admin',
       active: true,
     });

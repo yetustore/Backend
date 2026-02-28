@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 
 const statusEntrySchema = new mongoose.Schema({
   status: { type: String, enum: ['agendado', 'em_progresso', 'comprado', 'cancelado'], required: true },
+  adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
+  adminName: { type: String },
+  adminPhone: { type: String },
   timestamp: { type: Date, default: Date.now },
 }, { _id: false });
 

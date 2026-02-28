@@ -7,6 +7,7 @@ dotenv.config({ path: new URL('../.env', import.meta.url) });
 
 const username = 'manuelpiresluis';
 const password = 'admin123456789';
+const phone = '929004469';
 
 const run = async () => {
   await connectDb(process.env.MONGO_URI);
@@ -18,6 +19,7 @@ const run = async () => {
     existing.passwordHash = passwordHash;
     existing.active = true;
     if (!existing.role) existing.role = 'Super Admin';
+    if (phone) existing.phone = phone;
     await existing.save();
     console.log('Admin atualizado:', username);
   } else {
@@ -28,6 +30,7 @@ const run = async () => {
       active: true,
       name: 'Manuel Pires Luis',
       email: 'manuel.luis@mundodaimportacao.com',
+      phone,
     });
     console.log('Admin criado:', username);
   }

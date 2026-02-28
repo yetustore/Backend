@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { Order } from '../models/Order.js';
+import { Admin } from '../models/Admin.js';
 import { Product } from '../models/Product.js';
 import { User } from '../models/User.js';
 import { AffiliateLink } from '../models/AffiliateLink.js';
@@ -135,7 +136,18 @@ router.patch('/:id/status', requireAuth('admin'), async (req, res, next) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: 'Pedido nao encontrado' });
     order.status = status;
-    order.statusHistory = [...(order.statusHistory || []), { status, timestamp: new Date() }];
+    let adminInfo = {};
+    if (status === 'em_progresso') {
+      const admin = await Admin.findById(req.auth.sub);
+      if (admin) {
+        adminInfo = {
+          adminId: admin._id,
+          adminName: admin.name || admin.username,
+          adminPhone: admin.phone || '',
+        };
+      }
+    }
+    order.statusHistory = [...(order.statusHistory || []), { status, timestamp: new Date(), ...adminInfo }];
     await order.save();
     const product = await Product.findById(order.productId);
     const user = await User.findById(order.userId);
