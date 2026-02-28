@@ -16,7 +16,6 @@ const app = express();
 
 app.use(helmet());
 const allowedOrigins = [process.env.CLIENT_URL, process.env.ADMIN_URL].filter(Boolean);
-console.log('Allowed CORS origins:', allowedOrigins);
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
@@ -27,6 +26,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '1mb' }));
 app.use(morgan('dev'));
+
+app.get('/ping', (_req, res) => {
+  res.send('estou vivo');
+});
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });

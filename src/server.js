@@ -25,3 +25,16 @@ start().catch((err) => {
   process.exit(1);
 });
 
+
+setInterval(async () => {
+  try {
+    const response = await fetch('https://apiyetustore.onrender.com/ping');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.text();
+    console.log(data);
+  } catch (error) {
+    console.error('Erro ao chamar rota:', error);
+  }
+}, 10 * 60 * 1000);
