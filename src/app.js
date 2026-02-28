@@ -15,8 +15,14 @@ import adminsRoutes from './routes/admins.js';
 const app = express();
 
 app.use(helmet());
+const allowedOrigins = [process.env.CLIENT_URL, process.env.ADMIN_URL].filter(Boolean);
+console.log('Allowed CORS origins:', allowedOrigins);
 app.use(cors({
-  origin: (origin, cb) => cb(null, true),
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error('Not allowed by CORS'));
+  },
   credentials: false,
 }));
 app.use(express.json({ limit: '1mb' }));
@@ -39,4 +45,3 @@ app.use(notFound);
 app.use(errorHandler);
 
 export default app;
-
