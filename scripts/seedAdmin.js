@@ -5,7 +5,7 @@ import { Admin } from '../src/models/Admin.js';
 
 dotenv.config({ path: new URL('../.env', import.meta.url) });
 
-const username = 'adimin';
+const username = 'manuelpiresluis';
 const password = 'admin123456789';
 
 const run = async () => {
@@ -26,8 +26,8 @@ const run = async () => {
       passwordHash,
       role: 'Super Admin',
       active: true,
-      name: 'Administrador',
-      email: 'admin@yetustore.ao',
+      name: 'Manuel Pires Luis',
+      email: 'manuel.luis@mundodaimportacao.com',
     });
     console.log('Admin criado:', username);
   }

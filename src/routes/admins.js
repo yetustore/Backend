@@ -11,7 +11,7 @@ const createSchema = z.object({
   password: z.string().min(6),
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
-  role: z.enum(['Super Admin', 'Admin', 'Moderador']).optional(),
+  role: z.enum(['Super Admin', 'Admin', 'Entregador']).optional(),
   active: z.boolean().optional(),
 });
 
@@ -20,7 +20,7 @@ const updateSchema = z.object({
   password: z.string().min(6).optional(),
   name: z.string().min(2).optional(),
   email: z.string().email().optional(),
-  role: z.enum(['Super Admin', 'Admin', 'Moderador']).optional(),
+  role: z.enum(['Super Admin', 'Admin', 'Entregador']).optional(),
   active: z.boolean().optional(),
 });
 
