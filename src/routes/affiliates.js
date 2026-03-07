@@ -36,17 +36,32 @@ const MIN_WITHDRAW = 25000;
 const MAX_WITHDRAW = 100000;
 const DAILY_WITHDRAW_LIMIT = 100000;
 
-const toProductDto = (p) => ({
-  id: p._id.toString(),
-  name: p.name,
-  description: p.description || '',
-  price: p.price,
-  currency: p.currency || 'AOA',
-  categories: (p.categories || []).map(id => id.toString()),
-  imageUrl: p.imageUrl || '',
-  rating: p.rating || 0,
-  stock: p.stock || 0,
-});
+const normalizeMedia = (media, imageUrl) => {
+  const list = Array.isArray(media) ? media.filter(m => m?.url) : [];
+  if (list.length === 0 && imageUrl) list.push({ type: 'image', url: imageUrl });
+  return list;
+};
+
+const getFirstImageUrl = (media, fallback = '') => {
+  const first = (media || []).find(m => m.type === 'image' && m.url);
+  return first?.url || fallback || '';
+};
+
+const toProductDto = (p) => {
+  const media = normalizeMedia(p.media || [], p.imageUrl || '');
+  return {
+    id: p._id.toString(),
+    name: p.name,
+    description: p.description || '',
+    price: p.price,
+    currency: p.currency || 'AOA',
+    categories: (p.categories || []).map(id => id.toString()),
+    imageUrl: getFirstImageUrl(media, p.imageUrl || ''),
+    media,
+    rating: p.rating || 0,
+    stock: p.stock || 0,
+  };
+};
 
 const toDto = (link, product, user, orders) => ({
   id: link._id.toString(),
@@ -304,6 +319,3 @@ router.patch('/payouts/:id', requireAuth('admin'), async (req, res, next) => {
 });
 
 export default router;
-
-
-
