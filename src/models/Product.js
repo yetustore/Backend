@@ -7,6 +7,10 @@ const productSchema = new mongoose.Schema({
   currency: { type: String, default: 'AOA' },
   categories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Category' }],
   imageUrl: { type: String, default: '' },
+  media: [{
+    type: { type: String, enum: ['image', 'video'], required: true },
+    url: { type: String, required: true, trim: true },
+  }],
   rating: { type: Number, default: 0 },
   stock: { type: Number, default: 0 },
 }, { timestamps: true });

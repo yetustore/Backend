@@ -7,30 +7,75 @@ import { safeEmit } from '../realtime/socket.js';
 
 const router = express.Router();
 
-const productSchema = z.object({
-  name: z.string().min(2),
-  description: z.string().max(1000).optional().default(''),
-  price: z.number().positive(),
-  currency: z.string().min(1).default('AOA'),
-  categories: z.array(z.string().min(1)).min(1),
-  imageUrl: z.string().url().optional().default(''),
-  rating: z.number().min(0).max(5).optional().default(0),
-  stock: z.number().min(0).optional().default(0),
+const mediaItemSchema = z.object({
+  type: z.enum(['image', 'video']),
+  url: z.string().url(),
 });
 
-const toDto = (p) => ({
-  id: p._id.toString(),
-  name: p.name,
-  description: p.description || '',
-  price: p.price,
-  currency: p.currency || 'AOA',
-  categories: (p.categories || []).map(id => id.toString()),
-  imageUrl: p.imageUrl || '',
-  rating: p.rating || 0,
-  stock: p.stock || 0,
-  createdAt: p.createdAt,
-  updatedAt: p.updatedAt,
+const baseSchema = z.object({
+  name: z.string().min(2),
+  description: z.string().max(1000).optional(),
+  price: z.number().positive(),
+  currency: z.string().min(1),
+  categories: z.array(z.string().min(1)).min(1),
+  imageUrl: z.string().url().optional(),
+  media: z.array(mediaItemSchema).optional(),
+  rating: z.number().min(0).max(5).optional(),
+  stock: z.number().min(0).optional(),
 });
+
+const createSchema = baseSchema.extend({
+  description: baseSchema.shape.description.default(''),
+  currency: baseSchema.shape.currency.default('AOA'),
+  imageUrl: baseSchema.shape.imageUrl.default(''),
+  media: baseSchema.shape.media.default([]),
+  rating: baseSchema.shape.rating.default(0),
+  stock: baseSchema.shape.stock.default(0),
+}).superRefine((data, ctx) => {
+  const media = data.media || [];
+  const hasImage = media.some(m => m.type === 'image');
+  if (!hasImage && !data.imageUrl) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['media'], message: 'Informe ao menos uma foto' });
+  }
+});
+
+const updateSchema = baseSchema.partial().superRefine((data, ctx) => {
+  if (data.media) {
+    const hasImage = data.media.some(m => m.type === 'image');
+    if (!hasImage) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['media'], message: 'Informe ao menos uma foto' });
+    }
+  }
+});
+
+const normalizeMedia = (media, imageUrl) => {
+  const list = Array.isArray(media) ? media.filter(m => m?.url) : [];
+  if (list.length === 0 && imageUrl) list.push({ type: 'image', url: imageUrl });
+  return list;
+};
+
+const getFirstImageUrl = (media, fallback = '') => {
+  const first = (media || []).find(m => m.type === 'image' && m.url);
+  return first?.url || fallback || '';
+};
+
+const toDto = (p) => {
+  const media = normalizeMedia(p.media || [], p.imageUrl || '');
+  return {
+    id: p._id.toString(),
+    name: p.name,
+    description: p.description || '',
+    price: p.price,
+    currency: p.currency || 'AOA',
+    categories: (p.categories || []).map(id => id.toString()),
+    imageUrl: getFirstImageUrl(media, p.imageUrl || ''),
+    media,
+    rating: p.rating || 0,
+    stock: p.stock || 0,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  };
+};
 
 router.get('/', async (req, res, next) => {
   try {
@@ -56,14 +101,19 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', requireAuth('admin'), async (req, res, next) => {
   try {
-    const data = productSchema.parse(req.body);
+    const data = createSchema.parse(req.body);
     const categoriesExist = await Category.countDocuments({ _id: { $in: data.categories } });
     if (categoriesExist !== data.categories.length) {
       return res.status(400).json({ error: 'Categoria invalida' });
     }
+    const media = normalizeMedia(data.media, data.imageUrl);
+    const imageUrl = getFirstImageUrl(media, data.imageUrl || '');
+
     const product = await Product.create({
       ...data,
       categories: data.categories,
+      media,
+      imageUrl,
     });
     safeEmit('products.updated', { id: product._id.toString() });
     res.json({ product: toDto(product) });
@@ -74,13 +124,20 @@ router.post('/', requireAuth('admin'), async (req, res, next) => {
 
 router.put('/:id', requireAuth('admin'), async (req, res, next) => {
   try {
-    const data = productSchema.partial().parse(req.body);
+    const data = updateSchema.parse(req.body);
     if (data.categories) {
       const categoriesExist = await Category.countDocuments({ _id: { $in: data.categories } });
       if (categoriesExist !== data.categories.length) {
         return res.status(400).json({ error: 'Categoria invalida' });
       }
     }
+
+    if (data.media) {
+      const media = normalizeMedia(data.media, data.imageUrl);
+      data.media = media;
+      data.imageUrl = getFirstImageUrl(media, data.imageUrl || '');
+    }
+
     const product = await Product.findByIdAndUpdate(req.params.id, data, { new: true });
     if (!product) return res.status(404).json({ error: 'Produto nao encontrado' });
     safeEmit('products.updated', { id: product._id.toString() });

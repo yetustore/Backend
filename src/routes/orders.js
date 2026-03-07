@@ -24,17 +24,32 @@ const statusSchema = z.object({
   status: z.enum(['agendado', 'em_progresso', 'comprado', 'cancelado']),
 });
 
-const toProductDto = (p) => ({
-  id: p._id.toString(),
-  name: p.name,
-  description: p.description || '',
-  price: p.price,
-  currency: p.currency || 'AOA',
-  categories: (p.categories || []).map(id => id.toString()),
-  imageUrl: p.imageUrl || '',
-  rating: p.rating || 0,
-  stock: p.stock || 0,
-});
+const normalizeMedia = (media, imageUrl) => {
+  const list = Array.isArray(media) ? media.filter(m => m?.url) : [];
+  if (list.length === 0 && imageUrl) list.push({ type: 'image', url: imageUrl });
+  return list;
+};
+
+const getFirstImageUrl = (media, fallback = '') => {
+  const first = (media || []).find(m => m.type === 'image' && m.url);
+  return first?.url || fallback || '';
+};
+
+const toProductDto = (p) => {
+  const media = normalizeMedia(p.media || [], p.imageUrl || '');
+  return {
+    id: p._id.toString(),
+    name: p.name,
+    description: p.description || '',
+    price: p.price,
+    currency: p.currency || 'AOA',
+    categories: (p.categories || []).map(id => id.toString()),
+    imageUrl: getFirstImageUrl(media, p.imageUrl || ''),
+    media,
+    rating: p.rating || 0,
+    stock: p.stock || 0,
+  };
+};
 
 const toOrderDto = (o, product, user, affiliateUser) => ({
   id: o._id.toString(),
