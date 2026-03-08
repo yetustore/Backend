@@ -82,8 +82,10 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
     let affiliateUser = null;
     if (data.affiliateCode) {
       affiliateLink = await AffiliateLink.findOne({ code: data.affiliateCode });
-      if (affiliateLink) {
+      if (affiliateLink && affiliateLink.userId.toString() !== req.auth.sub) {
         affiliateUser = await User.findById(affiliateLink.userId);
+      } else {
+        affiliateLink = null;
       }
     }
 
