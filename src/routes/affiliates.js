@@ -202,8 +202,8 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
       exists = await AffiliateLink.exists({ code });
     }
 
-    const shareBaseUrl = getPublicBaseUrl(req);
-    const url = `${shareBaseUrl}/r/${code}`;
+    const clientUrl = getClientUrl();
+    const url = `${clientUrl}/products/${product._id.toString()}?ref=${encodeURIComponent(code)}`;
 
     const link = await AffiliateLink.create({
       userId: req.auth.sub,
