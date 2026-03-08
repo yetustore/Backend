@@ -6,14 +6,15 @@ import { errorHandler, notFound } from './middleware/errors.js';
 import authClientRoutes from './routes/authClient.js';
 import authAdminRoutes from './routes/authAdmin.js';
 import categoryRoutes from './routes/categories.js';
-import productRoutes from './routes/products.js';
+import productRoutes, { productShareHandler } from './routes/products.js';
 import orderRoutes from './routes/orders.js';
-import affiliateRoutes from './routes/affiliates.js';
+import affiliateRoutes, { affiliateShareHandler } from './routes/affiliates.js';
 import dashboardRoutes from './routes/dashboard.js';
 import adminsRoutes from './routes/admins.js';
 
 const app = express();
 
+app.set('trust proxy', 1);
 app.use(helmet());
 const allowedOrigins = [process.env.CLIENT_URL, process.env.ADMIN_URL].filter(Boolean);
 app.use(cors({
@@ -34,6 +35,9 @@ app.get('/ping', (_req, res) => {
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
 });
+
+app.get('/r/:code', affiliateShareHandler);
+app.get('/p/:id', productShareHandler);
 
 app.use('/api/v1/auth/client', authClientRoutes);
 app.use('/api/v1/auth/admin', authAdminRoutes);
