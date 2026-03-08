@@ -36,6 +36,8 @@ const MIN_WITHDRAW = 25000;
 const MAX_WITHDRAW = 100000;
 const DAILY_WITHDRAW_LIMIT = 100000;
 
+const DEFAULT_CLIENT_URL = 'http://localhost:5173';
+
 const normalizeMedia = (media, imageUrl) => {
   const list = Array.isArray(media) ? media.filter(m => m?.url) : [];
   if (list.length === 0 && imageUrl) list.push({ type: 'image', url: imageUrl });
@@ -45,6 +47,86 @@ const normalizeMedia = (media, imageUrl) => {
 const getFirstImageUrl = (media, fallback = '') => {
   const first = (media || []).find(m => m.type === 'image' && m.url);
   return first?.url || fallback || '';
+};
+
+const trimTrailingSlash = (value = '') => value.replace(/\/+$/, '');
+
+const getClientUrl = () => trimTrailingSlash(process.env.CLIENT_URL || DEFAULT_CLIENT_URL);
+
+const getPublicBaseUrl = (req) => {
+  const configured = trimTrailingSlash(process.env.PUBLIC_API_URL || process.env.AFFILIATE_SHARE_URL || '');
+  if (configured) return configured;
+
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const protocol = (typeof forwardedProto === 'string' ? forwardedProto.split(',')[0] : req.protocol) || 'http';
+  return `${protocol}://${req.get('host')}`;
+};
+
+const toAbsoluteUrl = (url, baseUrl) => {
+  if (!url) return '';
+  try {
+    return new URL(url, `${trimTrailingSlash(baseUrl)}/`).toString();
+  } catch {
+    return url;
+  }
+};
+
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const escapeJsonForHtml = (value = '') => String(value).replace(/</g, '\\u003c');
+
+const renderAffiliatePage = ({ title, description, imageUrl, pageUrl, redirectUrl, product }) => {
+  const safeTitle = escapeHtml(title);
+  const safeDescription = escapeHtml(description);
+  const safeImageUrl = escapeHtml(imageUrl);
+  const safePageUrl = escapeHtml(pageUrl);
+  const safeRedirectUrl = escapeHtml(redirectUrl);
+  const productJsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description,
+    image: imageUrl ? [imageUrl] : [],
+    offers: {
+      '@type': 'Offer',
+      price: product.price,
+      priceCurrency: product.currency || 'AOA',
+      availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: redirectUrl,
+    },
+  });
+
+  return `<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${safeTitle}</title>
+    <meta name="description" content="${safeDescription}" />
+    <link rel="canonical" href="${safeRedirectUrl}" />
+    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:description" content="${safeDescription}" />
+    <meta property="og:type" content="product" />
+    <meta property="og:url" content="${safePageUrl}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:site_name" content="YetuStore" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${safeTitle}" />
+    <meta name="twitter:description" content="${safeDescription}" />
+    <meta name="twitter:image" content="${safeImageUrl}" />
+    <meta http-equiv="refresh" content="2;url=${safeRedirectUrl}" />
+    <script type="application/ld+json">${escapeJsonForHtml(productJsonLd)}</script>
+  </head>
+  <body style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+    <p>Redirecionando para o produto...</p>
+    <p><a href="${safeRedirectUrl}">Abrir produto</a></p>
+  </body>
+</html>`;
 };
 
 const toProductDto = (p) => {
@@ -120,8 +202,8 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
       exists = await AffiliateLink.exists({ code });
     }
 
-    const baseUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    const url = `${baseUrl}/r/${code}`;
+    const shareBaseUrl = getPublicBaseUrl(req);
+    const url = `${shareBaseUrl}/r/${code}`;
 
     const link = await AffiliateLink.create({
       userId: req.auth.sub,
@@ -139,6 +221,49 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
     next(err);
   }
 });
+
+export const affiliateShareHandler = async (req, res, next) => {
+  try {
+    const code = req.params.code?.trim();
+    if (!code) return res.status(404).send('Link nao encontrado');
+
+    const link = await AffiliateLink.findOne({ code });
+    if (!link) return res.status(404).send('Link nao encontrado');
+
+    link.clicks = (link.clicks || 0) + 1;
+    await link.save();
+    safeEmit('affiliates.updated', { id: link._id.toString() });
+
+    const product = await Product.findById(link.productId);
+    if (!product) return res.status(404).send('Produto nao encontrado');
+
+    const clientUrl = getClientUrl();
+    const pageUrl = `${getPublicBaseUrl(req)}/r/${encodeURIComponent(code)}`;
+    const redirectUrl = `${clientUrl}/products/${product._id.toString()}?ref=${encodeURIComponent(code)}`;
+    const media = normalizeMedia(product.media || [], product.imageUrl || '');
+    const title = product.name;
+    const description = product.description || `Veja ${product.name} na YetuStore.`;
+    const imageUrl = toAbsoluteUrl(getFirstImageUrl(media, product.imageUrl || ''), clientUrl);
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderAffiliatePage({
+      title,
+      description,
+      imageUrl,
+      pageUrl,
+      redirectUrl,
+      product: {
+        name: product.name,
+        description,
+        price: product.price,
+        currency: product.currency || 'AOA',
+        stock: product.stock || 0,
+      },
+    }));
+  } catch (err) {
+    next(err);
+  }
+};
 
 router.get('/my', requireAuth('client'), async (req, res, next) => {
   try {

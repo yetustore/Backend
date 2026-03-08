@@ -7,6 +7,8 @@ import { safeEmit } from '../realtime/socket.js';
 
 const router = express.Router();
 
+const DEFAULT_CLIENT_URL = 'http://localhost:5173';
+
 const mediaItemSchema = z.object({
   type: z.enum(['image', 'video']),
   url: z.string().url(),
@@ -59,6 +61,86 @@ const getFirstImageUrl = (media, fallback = '') => {
   return first?.url || fallback || '';
 };
 
+const trimTrailingSlash = (value = '') => value.replace(/\/+$/, '');
+
+const getClientUrl = () => trimTrailingSlash(process.env.CLIENT_URL || DEFAULT_CLIENT_URL);
+
+const getPublicBaseUrl = (req) => {
+  const configured = trimTrailingSlash(process.env.PUBLIC_API_URL || process.env.AFFILIATE_SHARE_URL || '');
+  if (configured) return configured;
+
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const protocol = (typeof forwardedProto === 'string' ? forwardedProto.split(',')[0] : req.protocol) || 'http';
+  return `${protocol}://${req.get('host')}`;
+};
+
+const toAbsoluteUrl = (url, baseUrl) => {
+  if (!url) return '';
+  try {
+    return new URL(url, `${trimTrailingSlash(baseUrl)}/`).toString();
+  } catch {
+    return url;
+  }
+};
+
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const escapeJsonForHtml = (value = '') => String(value).replace(/</g, '\\u003c');
+
+const renderProductSharePage = ({ title, description, imageUrl, pageUrl, redirectUrl, product }) => {
+  const safeTitle = escapeHtml(title);
+  const safeDescription = escapeHtml(description);
+  const safeImageUrl = escapeHtml(imageUrl);
+  const safePageUrl = escapeHtml(pageUrl);
+  const safeRedirectUrl = escapeHtml(redirectUrl);
+  const productJsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description,
+    image: imageUrl ? [imageUrl] : [],
+    offers: {
+      '@type': 'Offer',
+      price: product.price,
+      priceCurrency: product.currency || 'AOA',
+      availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      url: redirectUrl,
+    },
+  });
+
+  return `<!doctype html>
+<html lang="pt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${safeTitle}</title>
+    <meta name="description" content="${safeDescription}" />
+    <link rel="canonical" href="${safeRedirectUrl}" />
+    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:description" content="${safeDescription}" />
+    <meta property="og:type" content="product" />
+    <meta property="og:url" content="${safePageUrl}" />
+    <meta property="og:image" content="${safeImageUrl}" />
+    <meta property="og:site_name" content="YetuStore" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${safeTitle}" />
+    <meta name="twitter:description" content="${safeDescription}" />
+    <meta name="twitter:image" content="${safeImageUrl}" />
+    <meta http-equiv="refresh" content="2;url=${safeRedirectUrl}" />
+    <script type="application/ld+json">${escapeJsonForHtml(productJsonLd)}</script>
+  </head>
+  <body style="font-family: Arial, sans-serif; padding: 24px; color: #111827;">
+    <p>Redirecionando para o produto...</p>
+    <p><a href="${safeRedirectUrl}">Abrir produto</a></p>
+  </body>
+</html>`;
+};
+
 const toDto = (p) => {
   const media = normalizeMedia(p.media || [], p.imageUrl || '');
   return {
@@ -98,6 +180,38 @@ router.get('/:id', async (req, res, next) => {
     next(err);
   }
 });
+
+export const productShareHandler = async (req, res, next) => {
+  try {
+    const product = await Product.findById(req.params.id);
+    if (!product) return res.status(404).send('Produto nao encontrado');
+
+    const clientUrl = getClientUrl();
+    const pageUrl = `${getPublicBaseUrl(req)}/p/${encodeURIComponent(product._id.toString())}`;
+    const redirectUrl = `${clientUrl}/products/${product._id.toString()}`;
+    const media = normalizeMedia(product.media || [], product.imageUrl || '');
+    const title = product.name;
+    const description = product.description || `Veja ${product.name} na YetuStore.`;
+    const imageUrl = toAbsoluteUrl(getFirstImageUrl(media, product.imageUrl || ''), clientUrl);
+
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderProductSharePage({
+      title,
+      description,
+      imageUrl,
+      pageUrl,
+      redirectUrl,
+      product: {
+        name: product.name,
+        price: product.price,
+        currency: product.currency || 'AOA',
+        stock: product.stock || 0,
+      },
+    }));
+  } catch (err) {
+    next(err);
+  }
+};
 
 router.post('/', requireAuth('admin'), async (req, res, next) => {
   try {
