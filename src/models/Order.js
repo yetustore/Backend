@@ -8,9 +8,17 @@ const statusEntrySchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
 }, { _id: false });
 
+const orderItemSchema = new mongoose.Schema({
+  productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+  quantity: { type: Number, required: true, min: 1 },
+  unitPrice: { type: Number, required: true },
+  totalPrice: { type: Number, required: true },
+}, { _id: false });
+
 const orderSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+  items: { type: [orderItemSchema], required: true },
+  totalAmount: { type: Number, required: true },
   status: { type: String, enum: ['agendado', 'em_progresso', 'comprado', 'cancelado'], default: 'agendado' },
   scheduledDate: { type: String, required: true },
   scheduledTime: { type: String, required: true },
