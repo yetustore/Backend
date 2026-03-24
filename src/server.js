@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const port = process.env.PORT || 4000;
+const adminUrl = process.env.ADMIN_URL || 'http://localhost:3000';
 
 const start = async () => {
   await connectDb(process.env.MONGO_URI);
@@ -28,7 +29,7 @@ start().catch((err) => {
 
 setInterval(async () => {
   try {
-    const response = await fetch('https://apiyetustore.onrender.com/ping');
+    const response = await fetch(`${adminUrl}/ping`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }

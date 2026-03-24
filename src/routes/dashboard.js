@@ -40,11 +40,7 @@ router.get('/', requireAuth('admin'), async (_req, res, next) => {
     const totalPaid = payouts.filter(p => p.status === 'paid').reduce((s, p) => s + p.amount, 0);
     const totalRequested = payouts.filter(p => p.status === 'requested').reduce((s, p) => s + p.amount, 0);
 
-    const productMap = new Map(products.map(p => [p._id.toString(), p]));
-    const grossSales = orders.filter(o => o.status === 'comprado').reduce((s, o) => {
-      const product = productMap.get(o.productId?.toString());
-      return s + (product?.price || 0);
-    }, 0);
+    const grossSales = orders.filter(o => o.status === 'comprado').reduce((s, o) => s + (o.totalAmount || 0), 0);
     const netSales = Math.max(grossSales - totalPaid, 0);
 
     res.json({

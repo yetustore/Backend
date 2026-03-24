@@ -176,15 +176,8 @@ const genCode = () => `AFF-${Math.random().toString(36).slice(2, 8).toUpperCase(
 
 const calcEarnings = async (userId) => {
   const orders = await Order.find({ affiliateUserId: userId, status: 'comprado' });
-  if (orders.length === 0) return 0;
-  const products = await Product.find({ _id: { $in: orders.map(o => o.productId) } });
-  const prodMap = new Map(products.map(p => [p._id.toString(), p]));
-  let total = 0;
-  for (const o of orders) {
-    const product = prodMap.get(o.productId.toString());
-    if (product) total += product.price * 0.05;
-  }
-  return Math.round(total);
+  const total = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  return Math.round(total * 0.05);
 };
 
 const hasBankDetails = (user) => Boolean(user?.bankAccountName && user?.bankName && user?.bankIban);

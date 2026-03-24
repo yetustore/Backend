@@ -10,8 +10,13 @@ import { safeEmit } from '../realtime/socket.js';
 
 const router = express.Router();
 
-const createSchema = z.object({
+const itemSchema = z.object({
   productId: z.string().min(1),
+  quantity: z.number().int().positive(),
+});
+
+const createSchema = z.object({
+  items: z.array(itemSchema).min(1),
   scheduledDate: z.string().min(1),
   scheduledTime: z.string().min(1),
   address: z.string().min(5),
@@ -35,6 +40,16 @@ const getFirstImageUrl = (media, fallback = '') => {
   return first?.url || fallback || '';
 };
 
+const collectProductIds = (orders) => {
+  const ids = new Set();
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      if (item?.productId) ids.add(item.productId.toString());
+    }
+  }
+  return [...ids];
+};
+
 const toProductDto = (p) => {
   const media = normalizeMedia(p.media || [], p.imageUrl || '');
   return {
@@ -51,32 +66,59 @@ const toProductDto = (p) => {
   };
 };
 
-const toOrderDto = (o, product, user, affiliateUser) => ({
-  id: o._id.toString(),
-  userId: o.userId.toString(),
-  productId: o.productId.toString(),
+const toOrderItemDto = (item, product) => ({
+  productId: item.productId?.toString(),
+  quantity: item.quantity,
+  unitPrice: item.unitPrice,
+  totalPrice: item.totalPrice,
   product: product ? toProductDto(product) : undefined,
-  status: o.status,
-  scheduledDate: o.scheduledDate,
-  scheduledTime: o.scheduledTime,
-  address: o.address,
-  latitude: o.latitude,
-  longitude: o.longitude,
-  affiliateId: o.affiliateId,
-  affiliateCode: o.affiliateCode,
-  affiliateName: affiliateUser?.name || '',
-  createdAt: o.createdAt,
-  updatedAt: o.updatedAt,
-  statusHistory: o.statusHistory || [],
-  customerName: user?.name || '',
-  customerPhone: user?.phone || '',
 });
+
+const toOrderDto = (o, productMap = new Map(), user, affiliateUser) => {
+  const items = (o.items || []).map(item => toOrderItemDto(item, productMap.get(item.productId?.toString())));
+  const primaryProduct = items[0]?.product;
+  return {
+    id: o._id.toString(),
+    userId: o.userId.toString(),
+    items,
+    totalAmount: o.totalAmount,
+    product: primaryProduct,
+    status: o.status,
+    scheduledDate: o.scheduledDate,
+    scheduledTime: o.scheduledTime,
+    address: o.address,
+    latitude: o.latitude,
+    longitude: o.longitude,
+    affiliateId: o.affiliateId,
+    affiliateCode: o.affiliateCode,
+    affiliateName: affiliateUser?.name || '',
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+    statusHistory: o.statusHistory || [],
+    customerName: user?.name || '',
+    customerPhone: user?.phone || '',
+  };
+};
 
 router.post('/', requireAuth('client'), async (req, res, next) => {
   try {
     const data = createSchema.parse(req.body);
-    const product = await Product.findById(data.productId);
-    if (!product) return res.status(404).json({ error: 'Produto nao encontrado' });
+    const productIds = [...new Set(data.items.map(item => item.productId))];
+    const products = await Product.find({ _id: { $in: productIds } });
+    if (products.length !== productIds.length) {
+      return res.status(404).json({ error: 'Um ou mais produtos nao encontrados' });
+    }
+    const productMap = new Map(products.map(p => [p._id.toString(), p]));
+    const orderItems = data.items.map(item => {
+      const product = productMap.get(item.productId);
+      return {
+        productId: product._id,
+        quantity: item.quantity,
+        unitPrice: product.price,
+        totalPrice: product.price * item.quantity,
+      };
+    });
+    const totalAmount = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
 
     let affiliateLink = null;
     let affiliateUser = null;
@@ -91,7 +133,8 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
 
     const order = await Order.create({
       userId: req.auth.sub,
-      productId: data.productId,
+      items: orderItems,
+      totalAmount,
       scheduledDate: data.scheduledDate,
       scheduledTime: data.scheduledTime,
       address: data.address,
@@ -113,7 +156,7 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
 
     const user = await User.findById(req.auth.sub);
     safeEmit('orders.updated', { id: order._id.toString() });
-    res.json({ order: toOrderDto(order, product, user, affiliateUser) });
+    res.json({ order: toOrderDto(order, productMap, user, affiliateUser) });
   } catch (err) {
     next(err);
   }
@@ -122,11 +165,12 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
 router.get('/my', requireAuth('client'), async (req, res, next) => {
   try {
     const orders = await Order.find({ userId: req.auth.sub }).sort({ createdAt: -1 });
-    const products = await Product.find({ _id: { $in: orders.map(o => o.productId) } });
+    const productIds = collectProductIds(orders);
+    const products = productIds.length > 0 ? await Product.find({ _id: { $in: productIds } }) : [];
     const affiliateUsers = await User.find({ _id: { $in: orders.map(o => o.affiliateUserId).filter(Boolean) } });
     const prodMap = new Map(products.map(p => [p._id.toString(), p]));
     const affMap = new Map(affiliateUsers.map(u => [u._id.toString(), u]));
-    res.json({ orders: orders.map(o => toOrderDto(o, prodMap.get(o.productId.toString()), null, affMap.get(o.affiliateUserId?.toString()))) });
+    res.json({ orders: orders.map(o => toOrderDto(o, prodMap, null, affMap.get(o.affiliateUserId?.toString()))) });
   } catch (err) {
     next(err);
   }
@@ -135,13 +179,14 @@ router.get('/my', requireAuth('client'), async (req, res, next) => {
 router.get('/', requireAuth('admin'), async (_req, res, next) => {
   try {
     const orders = await Order.find().sort({ createdAt: -1 });
-    const products = await Product.find({ _id: { $in: orders.map(o => o.productId) } });
+    const productIds = collectProductIds(orders);
+    const products = productIds.length > 0 ? await Product.find({ _id: { $in: productIds } }) : [];
     const users = await User.find({ _id: { $in: orders.map(o => o.userId) } });
     const affiliateUsers = await User.find({ _id: { $in: orders.map(o => o.affiliateUserId).filter(Boolean) } });
     const prodMap = new Map(products.map(p => [p._id.toString(), p]));
     const userMap = new Map(users.map(u => [u._id.toString(), u]));
     const affMap = new Map(affiliateUsers.map(u => [u._id.toString(), u]));
-    res.json({ orders: orders.map(o => toOrderDto(o, prodMap.get(o.productId.toString()), userMap.get(o.userId.toString()), affMap.get(o.affiliateUserId?.toString()))) });
+    res.json({ orders: orders.map(o => toOrderDto(o, prodMap, userMap.get(o.userId.toString()), affMap.get(o.affiliateUserId?.toString()))) });
   } catch (err) {
     next(err);
   }
@@ -166,11 +211,13 @@ router.patch('/:id/status', requireAuth('admin'), async (req, res, next) => {
     }
     order.statusHistory = [...(order.statusHistory || []), { status, timestamp: new Date(), ...adminInfo }];
     await order.save();
-    const product = await Product.findById(order.productId);
+    const productIds = collectProductIds([order]);
+    const products = productIds.length > 0 ? await Product.find({ _id: { $in: productIds } }) : [];
+    const prodMap = new Map(products.map(p => [p._id.toString(), p]));
     const user = await User.findById(order.userId);
     const affiliateUser = order.affiliateUserId ? await User.findById(order.affiliateUserId) : null;
     safeEmit('orders.updated', { id: order._id.toString(), status });
-    res.json({ order: toOrderDto(order, product, user, affiliateUser) });
+    res.json({ order: toOrderDto(order, prodMap, user, affiliateUser) });
   } catch (err) {
     next(err);
   }
