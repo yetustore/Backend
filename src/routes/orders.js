@@ -72,6 +72,7 @@ const toOrderItemDto = (item, product) => ({
   unitPrice: item.unitPrice,
   totalPrice: item.totalPrice,
   product: product ? toProductDto(product) : undefined,
+  affiliatePercent: item.affiliatePercent ?? 0,
 });
 
 const toOrderDto = (o, productMap = new Map(), user, affiliateUser) => {
@@ -116,6 +117,7 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
         quantity: item.quantity,
         unitPrice: product.price,
         totalPrice: product.price * item.quantity,
+        affiliatePercent: Math.max(0, Math.min(100, product.affiliatePercent || 0)),
       };
     });
     const totalAmount = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);

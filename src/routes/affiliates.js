@@ -176,8 +176,15 @@ const genCode = () => `AFF-${Math.random().toString(36).slice(2, 8).toUpperCase(
 
 const calcEarnings = async (userId) => {
   const orders = await Order.find({ affiliateUserId: userId, status: 'comprado' });
-  const total = orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-  return Math.round(total * 0.05);
+  let total = 0;
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      const percent = item?.affiliatePercent ?? 0;
+      const itemTotal = (item?.unitPrice || 0) * (item?.quantity || 0);
+      total += (itemTotal * percent) / 100;
+    }
+  }
+  return Math.round(total);
 };
 
 const hasBankDetails = (user) => Boolean(user?.bankAccountName && user?.bankName && user?.bankIban);
@@ -187,6 +194,12 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
     const { productId } = createSchema.parse(req.body);
     const product = await Product.findById(productId);
     if (!product) return res.status(404).json({ error: 'Produto nao encontrado' });
+
+    const existingLink = await AffiliateLink.findOne({ userId: req.auth.sub, productId });
+    if (existingLink) {
+      const user = await User.findById(req.auth.sub);
+      return res.json({ link: toDto(existingLink, product, user, []) });
+    }
 
     let code;
     let exists = true;
