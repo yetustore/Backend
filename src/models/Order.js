@@ -13,6 +13,7 @@ const orderItemSchema = new mongoose.Schema({
   quantity: { type: Number, required: true, min: 1 },
   unitPrice: { type: Number, required: true },
   totalPrice: { type: Number, required: true },
+  affiliatePercent: { type: Number, default: 0, min: 0, max: 100 },
 }, { _id: false });
 
 const orderSchema = new mongoose.Schema({

@@ -24,6 +24,7 @@ const baseSchema = z.object({
   media: z.array(mediaItemSchema).optional(),
   rating: z.number().min(0).max(5).optional(),
   stock: z.number().min(0).optional(),
+  affiliatePercent: z.number().min(0).max(100).optional(),
 });
 
 const createSchema = baseSchema.extend({
@@ -33,6 +34,7 @@ const createSchema = baseSchema.extend({
   media: baseSchema.shape.media.default([]),
   rating: baseSchema.shape.rating.default(0),
   stock: baseSchema.shape.stock.default(0),
+  affiliatePercent: z.number().min(0).max(100).default(5),
 }).superRefine((data, ctx) => {
   const media = data.media || [];
   const hasImage = media.some(m => m.type === 'image');
@@ -154,6 +156,7 @@ const toDto = (p) => {
     media,
     rating: p.rating || 0,
     stock: p.stock || 0,
+    affiliatePercent: p.affiliatePercent ?? 0,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };

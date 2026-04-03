@@ -13,6 +13,7 @@ const productSchema = new mongoose.Schema({
   }],
   rating: { type: Number, default: 0 },
   stock: { type: Number, default: 0 },
+  affiliatePercent: { type: Number, default: 5, min: 0, max: 100 },
 }, { timestamps: true });
 
 export const Product = mongoose.model('Product', productSchema);
