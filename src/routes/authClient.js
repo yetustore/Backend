@@ -108,7 +108,6 @@ router.post('/register', async (req, res, next) => {
     });
 
     await setEmailCode(user);
-    await setPhoneCode(user);
 
     const tokens = await issueTokens({ userId: user._id, userType: 'client' });
     res.json({ user: sanitizeUser(user), ...tokens });
@@ -201,6 +200,7 @@ router.post('/verify-email', requireAuth('client'), async (req, res, next) => {
     user.emailVerificationCodeHash = undefined;
     user.emailVerificationExpiresAt = undefined;
     await user.save();
+    await setPhoneCode(user);
     res.json({ user: sanitizeUser(user) });
   } catch (err) {
     next(err);
