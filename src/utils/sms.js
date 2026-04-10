@@ -23,7 +23,7 @@ export const sendSmsCode = async ({ to, code }) => {
         message: {
           api_key_app: process.env.TELCOSMS_API_KEY_APP,
           phone_number: String(to),
-          message_body: `Seu codigo de verificacao: ${code}`,
+          message_body: `Seu codigo de verificação: ${code}`,
         },
       }),
     });
