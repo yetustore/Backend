@@ -11,10 +11,13 @@ import { verifyGoogleIdToken } from '../utils/google.js';
 
 const router = express.Router();
 
+const normalizePhone = (phone) => phone.replace(/\s+/g, '').trim();
+const phoneSchema = z.string().transform(normalizePhone).pipe(z.string().min(7));
+
 const registerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
-  phone: z.string().min(7),
+  phone: phoneSchema,
   password: z.string().min(6),
 });
 
@@ -32,7 +35,7 @@ const codeSchema = z.object({
 });
 
 const setPhoneSchema = z.object({
-  phone: z.string().min(7),
+  phone: phoneSchema,
 });
 
 const forgotRequestSchema = z.object({
@@ -49,7 +52,6 @@ const forgotConfirmSchema = z.object({
 const profileSchema = z.object({
   name: z.string().min(2).optional(),
 });
-
 
 const sanitizeUser = (user) => ({
   id: user._id.toString(),
@@ -200,7 +202,6 @@ router.post('/verify-email', requireAuth('client'), async (req, res, next) => {
     user.emailVerificationCodeHash = undefined;
     user.emailVerificationExpiresAt = undefined;
     await user.save();
-    await setPhoneCode(user);
     res.json({ user: sanitizeUser(user) });
   } catch (err) {
     next(err);
