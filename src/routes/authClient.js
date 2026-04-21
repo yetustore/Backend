@@ -109,8 +109,6 @@ router.post('/register', async (req, res, next) => {
       phoneVerified: false,
     });
 
-    await setEmailCode(user);
-
     const tokens = await issueTokens({ userId: user._id, userType: 'client' });
     res.json({ user: sanitizeUser(user), ...tokens });
   } catch (err) {
