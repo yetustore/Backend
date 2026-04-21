@@ -1,9 +1,14 @@
 import mongoose from 'mongoose';
 
+const normalizePhone = (value) => {
+  if (typeof value !== 'string') return value;
+  return value.replace(/\s+/g, '').trim();
+};
+
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-  phone: { type: String, required: false, trim: true },
+  phone: { type: String, required: false, trim: true, set: normalizePhone },
   passwordHash: { type: String, required: false },
   provider: { type: String, enum: ['local', 'google'], default: 'local' },
   googleSub: { type: String },
