@@ -33,6 +33,10 @@ const sendAllEmailSchema = z.object({
   message: z.string().min(1),
 });
 
+const sendAllMessageSchema = z.object({
+  message: z.string().min(1),
+});
+
 const sanitizeAdmin = (admin) => ({
   id: admin._id.toString(),
   username: admin.username,
@@ -88,6 +92,33 @@ router.post('/email-all', requireAuth('admin'), async (req, res, next) => {
         await sendEmailMessage({
           to: user.email,
           subject,
+          message,
+        });
+        sentCount += 1;
+      } catch (error) {
+        console.error(`Failed to send email to ${user.email}:`, error);
+        failedCount += 1;
+      }
+    }
+
+    res.json({ ok: true, totalRecipients: users.length, sentCount, failedCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/message-all', requireAuth('admin'), async (req, res, next) => {
+  try {
+    const { message } = sendAllMessageSchema.parse(req.body);
+    const users = await User.find({ email: { $exists: true, $ne: '' } }).select('email');
+
+    let sentCount = 0;
+    let failedCount = 0;
+    for (const user of users) {
+      try {
+        await sendEmailMessage({
+          to: user.email,
+          subject: 'YetuStore - Mensagem importante',
           message,
         });
         sentCount += 1;
