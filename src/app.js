@@ -11,6 +11,7 @@ import orderRoutes from './routes/orders.js';
 import affiliateRoutes, { affiliateShareHandler } from './routes/affiliates.js';
 import dashboardRoutes from './routes/dashboard.js';
 import adminsRoutes from './routes/admins.js';
+import usersRoutes from './routes/users.js';
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/affiliates', affiliateRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/admins', adminsRoutes);
+app.use('/api/v1/users', usersRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

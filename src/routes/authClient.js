@@ -60,6 +60,7 @@ const sanitizeUser = (user) => ({
   phone: user.phone || '',
   emailVerified: user.emailVerified,
   phoneVerified: user.phoneVerified,
+  acceptTerms: user.acceptTerms !== undefined ? user.acceptTerms : true,
   createdAt: user.createdAt,
 });
 
@@ -107,6 +108,7 @@ router.post('/register', async (req, res, next) => {
       provider: 'local',
       emailVerified: false,
       phoneVerified: false,
+      acceptTerms: true,
     });
 
     const tokens = await issueTokens({ userId: user._id, userType: 'client' });
@@ -149,6 +151,7 @@ router.post('/google', async (req, res, next) => {
         googleSub: payload.sub,
         emailVerified: true,
         phoneVerified: false,
+        acceptTerms: true,
       });
     } else if (!user.emailVerified) {
       user.emailVerified = true;
