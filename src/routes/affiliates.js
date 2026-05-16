@@ -338,6 +338,21 @@ router.get('/my/summary', requireAuth('client'), async (req, res, next) => {
     const totalWithdrawn = payouts.reduce((s, p) => s + p.amount, 0);
     const available = Math.max(totalEarned - totalWithdrawn, 0);
     const user = await User.findById(req.auth.sub);
+
+    const totalLinks = await AffiliateLink.countDocuments({ userId: req.auth.sub });
+    const activeLinks = await AffiliateLink.countDocuments({
+      userId: req.auth.sub,
+      expiresAt: { $gt: new Date() },
+    });
+    const { start, end } = getMonthRange();
+    const linksCreatedThisMonth = await AffiliateLink.countDocuments({
+      userId: req.auth.sub,
+      createdAt: {
+        $gte: start,
+        $lt: end,
+      },
+    });
+
     res.json({
       totalEarned,
       totalWithdrawn,
@@ -346,6 +361,10 @@ router.get('/my/summary', requireAuth('client'), async (req, res, next) => {
       maxWithdraw: MAX_WITHDRAW,
       hasBankDetails: hasBankDetails(user),
       bank: user ? { accountName: user.bankAccountName || '', bankName: user.bankName || '', iban: user.bankIban || '' } : null,
+      totalLinks,
+      activeLinks,
+      linksCreatedThisMonth,
+      monthlyLinkLimit: MONTHLY_LINK_LIMIT,
     });
   } catch (err) {
     next(err);

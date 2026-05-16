@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "accept-terms:update": "node scripts/addAcceptTermsToUsers.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
