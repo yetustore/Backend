@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { Admin } from '../models/Admin.js';
+import { User } from '../models/User.js';
+import { sendEmailMessage } from '../utils/email.js';
 
 const router = express.Router();
 
@@ -25,6 +27,12 @@ const updateSchema = z.object({
   role: z.enum(['Super Admin', 'Admin', 'Entregador']).optional(),
   active: z.boolean().optional(),
 });
+
+const sendAllEmailSchema = z.object({
+  subject: z.string().min(1),
+  message: z.string().min(1),
+});
+
 const sanitizeAdmin = (admin) => ({
   id: admin._id.toString(),
   username: admin.username,
@@ -63,6 +71,33 @@ router.post('/', requireAuth('admin'), async (req, res, next) => {
     });
 
     res.json({ admin: sanitizeAdmin(admin) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/email-all', requireAuth('admin'), async (req, res, next) => {
+  try {
+    const { subject, message } = sendAllEmailSchema.parse(req.body);
+    const users = await User.find({ email: { $exists: true, $ne: '' } }).select('email');
+
+    let sentCount = 0;
+    let failedCount = 0;
+    for (const user of users) {
+      try {
+        await sendEmailMessage({
+          to: user.email,
+          subject,
+          message,
+        });
+        sentCount += 1;
+      } catch (error) {
+        console.error(`Failed to send email to ${user.email}:`, error);
+        failedCount += 1;
+      }
+    }
+
+    res.json({ ok: true, totalRecipients: users.length, sentCount, failedCount });
   } catch (err) {
     next(err);
   }

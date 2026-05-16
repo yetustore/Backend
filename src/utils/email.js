@@ -30,6 +30,39 @@ export const sendEmailCode = async ({ to, code }) => {
   }
 };
 
+export const sendEmailMessage = async ({ to, subject, message }) => {
+  if (!hasResend() || !resend) {
+    console.warn('Resend disabled: missing RESEND_API_KEY or RESEND_FROM');
+    console.log(`Email notification for ${to}: ${subject} - ${message}`);
+    return;
+  }
+  try {
+    const result = await resend.emails.send({
+      from: process.env.RESEND_FROM,
+      to,
+      subject,
+      html: getMessageTemplate(subject, message),
+    });
+    if (result?.error) {
+      console.error('Resend email error:', result.error);
+    }
+  } catch (err) {
+    console.error('Resend email failed:', err);
+  }
+};
+
+const escapeHtml = (value = '') => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const formatEmailMessage = (message) => String(message)
+  .split(/\r?\n/)
+  .map((line) => `<p style="margin:0 0 14px; color:#666; font-size:16px; line-height:1.6;">${escapeHtml(line)}</p>`)
+  .join('');
+
 const getEmailTemplate = (code) => `
   <div style="margin:0; padding:0; background-color:#F4F4F4; font-family: Arial, sans-serif;">
     
@@ -97,5 +130,46 @@ const getEmailTemplate = (code) => `
       </tr>
     </table>
 
+  </div>
+`;
+
+const getMessageTemplate = (subject, message) => `
+  <div style="margin:0; padding:0; background-color:#F4F4F4; font-family: Arial, sans-serif;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="padding:20px 0;">
+      <tr>
+        <td align="center">
+          <table width="500" cellpadding="0" cellspacing="0" style="background:#FFFFFF; border-radius:10px; overflow:hidden;">
+            <tr>
+              <td style="background: linear-gradient(90deg, #E91E63, #FF4081); padding:20px; text-align:center;">
+                <h1 style="color:#FFFFFF; margin:0; font-size:24px;">
+                  YetuStore
+                </h1>
+                <p style="color:#FFE4EC; margin:5px 0 0; font-size:14px;">
+                  Compras fáceis têm nome
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:30px; text-align:left;">
+                <h2 style="color:#333333; margin-bottom:10px; font-size:22px;">
+                  ${escapeHtml(subject)}
+                </h2>
+                ${formatEmailMessage(message)}
+                <p style="color:#999; font-size:13px; margin-top:20px;">
+                  Obrigado por fazer parte da YetuStore.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#F4F4F4; padding:20px; text-align:center;">
+                <p style="font-size:12px; color:#777; margin:0;">
+                  © ${new Date().getFullYear()} YetuStore
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </div>
 `;
