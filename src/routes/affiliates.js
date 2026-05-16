@@ -35,6 +35,8 @@ const payoutStatusSchema = z.object({
 const MIN_WITHDRAW = 25000;
 const MAX_WITHDRAW = 100000;
 const DAILY_WITHDRAW_LIMIT = 100000;
+const MONTHLY_LINK_LIMIT = 3;
+const LINK_VALIDITY_DAYS = 30;
 
 const DEFAULT_CLIENT_URL = 'http://localhost:5173';
 
@@ -154,6 +156,8 @@ const toDto = (link, product, user, orders) => ({
   clicks: link.clicks || 0,
   ordersCount: link.ordersCount || 0,
   createdAt: link.createdAt,
+  expiresAt: link.expiresAt,
+  isExpired: !link.expiresAt || link.expiresAt.getTime() <= Date.now(),
   product: product ? toProductDto(product) : undefined,
   affiliateName: user?.name || '',
   orders: orders || [],
@@ -173,6 +177,18 @@ const toPayoutDto = (p, user) => ({
 });
 
 const genCode = () => `AFF-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+const isLinkExpired = (link) => !link?.expiresAt || new Date(link.expiresAt).getTime() <= Date.now();
+const addDays = (date, days) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+const getMonthRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { start, end };
+};
 
 const calcEarnings = async (userId) => {
   const orders = await Order.find({ affiliateUserId: userId, status: 'comprado' });
@@ -201,6 +217,19 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
       return res.json({ link: toDto(existingLink, product, user, []) });
     }
 
+    const { start, end } = getMonthRange();
+    const linksCreatedThisMonth = await AffiliateLink.countDocuments({
+      userId: req.auth.sub,
+      createdAt: {
+        $gte: start,
+        $lt: end,
+      },
+    });
+
+    if (linksCreatedThisMonth >= MONTHLY_LINK_LIMIT) {
+      return res.status(400).json({ error: `Limite mensal atingido: maximo de ${MONTHLY_LINK_LIMIT} links por mes` });
+    }
+
     let code;
     let exists = true;
     while (exists) {
@@ -218,6 +247,7 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
       url,
       clicks: 0,
       ordersCount: 0,
+      expiresAt: addDays(new Date(), LINK_VALIDITY_DAYS),
     });
 
     const user = await User.findById(req.auth.sub);
@@ -236,20 +266,24 @@ export const affiliateShareHandler = async (req, res, next) => {
     const link = await AffiliateLink.findOne({ code });
     if (!link) return res.status(404).send('Link nao encontrado');
 
-    link.clicks = (link.clicks || 0) + 1;
-    await link.save();
-    safeEmit('affiliates.updated', { id: link._id.toString() });
-
     const product = await Product.findById(link.productId);
     if (!product) return res.status(404).send('Produto nao encontrado');
 
     const clientUrl = getClientUrl();
     const pageUrl = `${getPublicBaseUrl(req)}/r/${encodeURIComponent(code)}`;
-    const redirectUrl = `${clientUrl}/products/${product._id.toString()}?ref=${encodeURIComponent(code)}`;
+    const redirectUrl = isLinkExpired(link)
+      ? `${clientUrl}/products/${product._id.toString()}`
+      : `${clientUrl}/products/${product._id.toString()}?ref=${encodeURIComponent(code)}`;
     const media = normalizeMedia(product.media || [], product.imageUrl || '');
     const title = product.name;
     const description = product.description || `Veja ${product.name} na YetuStore.`;
     const imageUrl = toAbsoluteUrl(getFirstImageUrl(media, product.imageUrl || ''), clientUrl);
+
+    if (!isLinkExpired(link)) {
+      link.clicks = (link.clicks || 0) + 1;
+      await link.save();
+      safeEmit('affiliates.updated', { id: link._id.toString() });
+    }
 
     res.set('Content-Type', 'text/html; charset=utf-8');
     res.send(renderAffiliatePage({
@@ -388,6 +422,7 @@ router.post('/track', async (req, res, next) => {
     const { code } = trackSchema.parse(req.body);
     const link = await AffiliateLink.findOne({ code });
     if (!link) return res.json({ ok: true });
+    if (isLinkExpired(link)) return res.json({ ok: true, expired: true });
     link.clicks = (link.clicks || 0) + 1;
     await link.save();
     safeEmit('affiliates.updated', { id: link._id.toString() });

@@ -7,6 +7,7 @@ const affiliateLinkSchema = new mongoose.Schema({
   url: { type: String, required: true },
   clicks: { type: Number, default: 0 },
   ordersCount: { type: Number, default: 0 },
+  expiresAt: { type: Date, required: true },
 }, { timestamps: true });
 
 export const AffiliateLink = mongoose.model('AffiliateLink', affiliateLinkSchema);
