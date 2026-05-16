@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
   googleSub: { type: String },
   emailVerified: { type: Boolean, default: false },
   phoneVerified: { type: Boolean, default: false },
+  acceptTerms: { type: Boolean, default: true },
   emailVerificationCodeHash: { type: String },
   emailVerificationExpiresAt: { type: Date },
   phoneVerificationCodeHash: { type: String },

@@ -39,6 +39,7 @@ const getFirstImageUrl = (media, fallback = '') => {
   const first = (media || []).find(m => m.type === 'image' && m.url);
   return first?.url || fallback || '';
 };
+const isLinkExpired = (link) => !link?.expiresAt || new Date(link.expiresAt).getTime() <= Date.now();
 
 const collectProductIds = (orders) => {
   const ids = new Set();
@@ -126,7 +127,7 @@ router.post('/', requireAuth('client'), async (req, res, next) => {
     let affiliateUser = null;
     if (data.affiliateCode) {
       affiliateLink = await AffiliateLink.findOne({ code: data.affiliateCode });
-      if (affiliateLink && affiliateLink.userId.toString() !== req.auth.sub) {
+      if (affiliateLink && !isLinkExpired(affiliateLink) && affiliateLink.userId.toString() !== req.auth.sub) {
         affiliateUser = await User.findById(affiliateLink.userId);
       } else {
         affiliateLink = null;
