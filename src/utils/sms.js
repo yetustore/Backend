@@ -36,3 +36,33 @@ export const sendSmsCode = async ({ to, code }) => {
     console.error('TelcoSMS send failed:', err);
   }
 };
+
+export const sendSmsMessage = async ({ to, message }) => {
+  if (!hasTelcoSms()) {
+    console.warn('TelcoSMS disabled: missing TELCOSMS_API_KEY_APP');
+    console.log(`SMS message for ${to}: ${message}`);
+    return;
+  }
+  try {
+    const response = await fetch('https://telcosms.co.ao/send_message', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: {
+          api_key_app: process.env.TELCOSMS_API_KEY_APP,
+          phone_number: String(to),
+          message_body: String(message),
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      throw new Error(`HTTP ${response.status} ${response.statusText}${errorText ? ` - ${errorText}` : ''}`);
+    }
+  } catch (err) {
+    console.error('TelcoSMS send failed:', err);
+  }
+};

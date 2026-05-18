@@ -51,6 +51,7 @@ const forgotConfirmSchema = z.object({
 
 const profileSchema = z.object({
   name: z.string().min(2).optional(),
+  sendEmail: z.boolean().optional(),
 });
 
 const sanitizeUser = (user) => ({
@@ -60,6 +61,7 @@ const sanitizeUser = (user) => ({
   phone: user.phone || '',
   emailVerified: user.emailVerified,
   phoneVerified: user.phoneVerified,
+  sendEmail: user.sendEmail,
   acceptTerms: user.acceptTerms !== undefined ? user.acceptTerms : true,
   createdAt: user.createdAt,
 });
@@ -181,6 +183,7 @@ router.post('/profile', requireAuth('client'), async (req, res, next) => {
     const user = await User.findById(req.auth.sub);
     if (!user) return res.status(404).json({ error: 'Usuario nao encontrado' });
     if (data.name) user.name = data.name;
+    if (data.sendEmail !== undefined) user.sendEmail = data.sendEmail;
     await user.save();
     res.json({ user: sanitizeUser(user) });
   } catch (err) {
