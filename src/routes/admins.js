@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { Admin } from '../models/Admin.js';
 import { User } from '../models/User.js';
 import { sendEmailMessage } from '../utils/email.js';
+import { sendSmsMessage } from '../utils/sms.js';
 
 const router = express.Router();
 
@@ -83,7 +84,7 @@ router.post('/', requireAuth('admin'), async (req, res, next) => {
 router.post('/email-all', requireAuth('admin'), async (req, res, next) => {
   try {
     const { subject, message } = sendAllEmailSchema.parse(req.body);
-    const users = await User.find({ email: { $exists: true, $ne: '' } }).select('email');
+    const users = await User.find({ email: { $exists: true, $ne: '' }, sendEmail: true }).select('email');
 
     let sentCount = 0;
     let failedCount = 0;
@@ -110,20 +111,19 @@ router.post('/email-all', requireAuth('admin'), async (req, res, next) => {
 router.post('/message-all', requireAuth('admin'), async (req, res, next) => {
   try {
     const { message } = sendAllMessageSchema.parse(req.body);
-    const users = await User.find({ email: { $exists: true, $ne: '' } }).select('email');
+    const users = await User.find({ phone: { $exists: true, $ne: '' } }).select('phone');
 
     let sentCount = 0;
     let failedCount = 0;
     for (const user of users) {
       try {
-        await sendEmailMessage({
-          to: user.email,
-          subject: 'YetuStore - Mensagem importante',
+        await sendSmsMessage({
+          to: user.phone,
           message,
         });
         sentCount += 1;
       } catch (error) {
-        console.error(`Failed to send email to ${user.email}:`, error);
+        console.error(`Failed to send SMS to ${user.phone}:`, error);
         failedCount += 1;
       }
     }
